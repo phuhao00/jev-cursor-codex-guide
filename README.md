@@ -430,7 +430,7 @@ module.exports = {
 
 - **动态难度调整（DDA）**：把玩家血量、弹药、近期击杀数、操作紧张度喂给 Jev（每 5 秒一次，避免卡帧），返回紧张度 Score：< 3 刷精英怪，> 9 暗调暴击率/刷血包。Codex 负责写 `EnemySpawner` 脚本并留出 `intensity` 参数。
 - **NPC 情感状态机**：玩家说话后由 Jev 瞬间 Choice 判断（angry/scared/ignore），直接播放预设动画；只有长对白才唤醒 Codex 生成文本。Unity 中用 `UnityWebRequest` + Coroutine 封装避免阻塞帧率。
-- **开源/实践案例**：NPC-Jev-Brain（概念项目，用 Jev 替代行为树节点判断）。
+- **开源/实践案例**：[**jev-behavior-tree**](https://github.com/phuhao00/jev-behavior-tree)（完整可运行的实战实现，详见下文）与 NPC-Jev-Brain（概念项目）。
 
 **Cursor Prompt 模板（可直接使用）**
 
@@ -438,6 +438,27 @@ module.exports = {
   > "Write a Unity C# class called AIDirector. It should use UnityWebRequest to send the player's health and ammo count to the Jev API every 5 seconds. The API returns a 'danger_level' score (1-10). Based on the score, adjust the spawnRate variable."
 - 产品设计（React/Next.js 智能意图跳转）：
   > "Create a React hook useIntent. When the user stops typing in the search bar for 500ms, send the text to Jev API to classify the intent into ['navigate', 'search', 'support']. If intent is 'navigate', automatically redirect them."
+
+**⭐ 实战开源实现：jev-behavior-tree（phuhao00）—— 用 Jev 替代行为树**
+
+> 仓库：**[phuhao00/jev-behavior-tree](https://github.com/phuhao00/jev-behavior-tree)**
+
+用 AI SDK 的 `experimental_evaluate` 调用 `typesafe-ai/jev`，替换行为树和状态机里的**判断层**。Jev 不写台词、不生成代码；游戏仍然负责移动、动画和寻路（那些是会跑很多帧的 Action），这个服务取代的是**条件节点和选择器**。
+
+| 行为树 | 这里 |
+| --- | --- |
+| Selector | 一次 `choice`。选项必须是游戏真能执行的战术 |
+| Condition | `boolean`。灰区标成 `uncertain`，不当成是或否 |
+| Utility | `score`。描述的是情境，不是「低/中/高」 |
+| Sequence | 不交给模型。模型只选一个战术，游戏自己播 |
+| Abort | `interrupt` 为真时，允许一次切换 |
+| Blackboard | 请求里的 `scene` / `agent` / `nearby` |
+
+- **接口**：`POST /v1/impulse`（单角色）、`POST /v1/world`（环境拍子）、`POST /v1/tick`（同一局面下环境 + 最多 16 个角色，默认 4 路并发）；`GET /health`
+- **多语言同构实现**：TypeScript (`127.0.0.1:8787`)、Go (`:8788`)、Rust (`:8789`)、C# (`:8790`)、C++ (`:8791`, WinHTTP)——五门语言共用同一份 JSON 合约，端口错开可同时运行，不依赖 TypeScript SDK
+- **工程要点**：置信度不够时保持上一拍战术（迟滞防抖，避免 NPC 每拍抖动）；`interrupt` 不能推翻明确的 `hold`；角色建议 2–4Hz、环境 0.5–1Hz，**不要放进 60 帧的 Update**；输入约 $0.042/百万 token，输出不另计
+- **预置角色**：`guard` / `civilian` / `predator` / `companion` / `ambient`；**预置环境拍子**：`hold_atmosphere`、`tighten_patrol`、`fog_stalk`、`ambush_now`、`release`、`seal_escape`（游戏把拍子映射到天气、刷怪和关门）
+- **部署提醒**：服务只听 `127.0.0.1`，不要暴露公网；Key 放 `.env` 的 `AI_GATEWAY_API_KEY`（走 Vercel AI Gateway，模型默认 `typesafe-ai/jev`）
 
 ### 🎨 产品设计与前端
 
